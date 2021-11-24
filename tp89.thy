@@ -46,6 +46,44 @@ fun export :: "transBdd \<Rightarrow> transaction list" where
 "export (v # va) = (case v of (tid, (amm, amc, False, True)) \<Rightarrow> (tid, amc) # (export va)
                                                          | _ \<Rightarrow> export va)"
 
+(* Ecriture des lemmes*) 
+
+
+(*Lemme 1 : toutes les transactions validées ont un montant strictement supérieur à 0*)
+
+lemma "( assoc a (export(traiterMessageList(m_list)))) = Some(am) \<longrightarrow> (am > 0)"
+  oops
+
+(*Lemme 2 : Dans la liste des transactions validées, tout triplet (c,m,i) n'apparaît qu'une seule fois)*)
+
+lemma "uniqueKey (export(traiterMessageList(m)))"
+  oops
+
+(*Lemme 3 : Toute transaction (même validée) peut être annulée *)
+
+
+(*Lemme 4 : Toute transaction annulée l'est définitivement *)
+
+lemma "List.member m_list (Cancel (c,m,i)) \<longrightarrow> (assoc (c,m,i) (export(traiterMessageList(m_list))) = None) "
+  oops
+
+(* Lemme 5 *)
+lemma "(List.member m_list (Pay (c,m,i) amm)) \<and> (List.member m_list (Ack (c,m,i) amc)) 
+\<and> (amm > 0) \<and> (amm \<ge> amc) \<and> \<not>(List.member m_list (Cancel (c,m,i)))   \<longrightarrow> (assoc (c,m,i) (export(traiterMessageList(m_list)))) = Some(am)"
+  oops
+
+(*Lemma 6*)
+lemma "(assoc (c,m,i) (export(traiterMessageList(m_list)))) = Some(am) \<longrightarrow> (List.member m_list (Pay (c,m,i) amm)) \<and> (List.member m_list (Ack (c,m,i) amc)) \<and> (amm \<ge> amc)"
+  oops
+
+(*Lemma 7*)
+lemma " assoc (c,m,i) (export(traiterMessageList(m_list))) = Some(am) \<and> (am \<ge> amm2) \<and> (am \<le> amc) \<longrightarrow>
+export(traiterMessageList(m_list)) = export(traiterMessageList(m_list@[(Pay (c,m,i) amm2)]))
+\<and> export(traiterMessageList(m_list)) = export(traiterMessageList(m_list@[(Ack (c,m,i) amc)]))"
+
+(*Lemma 8*)
+lemma ""
+
 
 (* ----- Exportation en Scala (Isabelle 2018) -------*)
 
