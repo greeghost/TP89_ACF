@@ -1,4 +1,4 @@
-package validator.<LE_NOM_DE_VOTRE_BINOME>
+package validator.BOULIER_SOURISSEAU
 
 import bank._
 
