@@ -28,12 +28,12 @@ fun traiterMessage :: "message \<Rightarrow> transBdd \<Rightarrow> transBdd" wh
 "traiterMessage (Cancel i) bdd = modify i (0, 0, True, False) bdd" |
 "traiterMessage (Pay i amc) bdd = (case (assoc i bdd) of None \<Rightarrow> (modify i (999999, amc, False, False) bdd)
                                     | Some(amm, amc2, ann, val) \<Rightarrow>
-                                        (if (\<not>ann \<and> \<not>val \<and> (amc > amc2)) 
+                                        (if (\<not>ann \<and> \<not>val \<and> (amc > amc2) \<and> (amc > 0) \<and> (amc2 > 0)) 
                                             then (modify i (amm, amc, ann, (amc \<ge> amm)) bdd) 
                                             else bdd))" |
 "traiterMessage (Ack i amm) bdd = (case (assoc i bdd) of None \<Rightarrow> (modify i (amm, 0, False, False) bdd)
                                     | Some(amm2, amc, ann, val) \<Rightarrow>
-                                        (if (\<not>ann \<and> \<not>val \<and> (amm < amm2)) 
+                                        (if (\<not>ann \<and> \<not>val \<and> (amm < amm2) \<and> (amm > 0) \<and> (amm2 > 0)) 
                                             then (modify i (amm, amc, ann, (amc \<ge> amm)) bdd) 
                                             else bdd))"
 
@@ -46,7 +46,10 @@ fun export :: "transBdd \<Rightarrow> transaction list" where
 "export (v # va) = (case v of (tid, (amm, amc, False, True)) \<Rightarrow> (tid, amc) # (export va)
                                                          | _ \<Rightarrow> export va)"
 
-(* Ecriture des lemmes*) 
+value "export(traiterMessageList([Ack (0, 0, 0) 0, Ack (0, 0, 0) 1]))"
+value "export(traiterMessageList([Pay (0, 0, 0) 1, Ack (0, 0, 0) 0]))"
+
+(* Ecriture des lemmes*)
 
 
 (*Lemme 1 : toutes les transactions validées ont un montant strictement supérieur à 0*)
@@ -80,10 +83,11 @@ lemma "(assoc (c,m,i) (export(traiterMessageList(m_list)))) = Some(am) \<longrig
 lemma " assoc (c,m,i) (export(traiterMessageList(m_list))) = Some(am) \<and> (am \<ge> amm2) \<and> (am \<le> amc) \<longrightarrow>
 export(traiterMessageList(m_list)) = export(traiterMessageList(m_list@[(Pay (c,m,i) amm2)]))
 \<and> export(traiterMessageList(m_list)) = export(traiterMessageList(m_list@[(Ack (c,m,i) amc)]))"
+  oops
 
-(*Lemma 8*)
-lemma ""
-
+(*Lemme 9*)
+lemma "(assoc (c,m,i) (export(traiterMessageList(m_list))) = Some(am)) \<longrightarrow> (List.member m_list(Pay (c,m,i) am))"
+  oops
 
 (* ----- Exportation en Scala (Isabelle 2018) -------*)
 
