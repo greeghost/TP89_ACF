@@ -25,7 +25,7 @@ import Converter._
 /* The object to complete */
 class ConcreteValidator extends TransValidator{
   var transBdd: List[((Nat.nat, (Nat.nat, Nat.nat)),
-                                (Nat.nat, (Nat.nat, (Boolean, Boolean))))] = List()
+                      (tp89.betterNat, (tp89.betterNat, (Boolean, Boolean))))] = List()
   def process(m:message):Unit={
     this.transBdd = tp89.traiterMessage(m, this.transBdd)
   }
@@ -57,34 +57,11 @@ def eq[A : equal](a: A, b: A): Boolean = equal[A](a, b)
 
 } /* object HOL */
 
-object Orderings {
-
-trait ord[A] {
-  val `Orderings.less_eq`: (A, A) => Boolean
-  val `Orderings.less`: (A, A) => Boolean
-}
-def less_eq[A](a: A, b: A)(implicit A: ord[A]): Boolean =
-  A.`Orderings.less_eq`(a, b)
-def less[A](a: A, b: A)(implicit A: ord[A]): Boolean = A.`Orderings.less`(a, b)
-object ord {
-  implicit def `Code_Numeral.ord_integer`: ord[BigInt] = new ord[BigInt] {
-    val `Orderings.less_eq` = (a: BigInt, b: BigInt) => a <= b
-    val `Orderings.less` = (a: BigInt, b: BigInt) => a < b
-  }
-}
-
-def max[A : ord](a: A, b: A): A = (if (less_eq[A](a, b)) b else a)
-
-} /* object Orderings */
-
 object Code_Numeral {
 
 def integer_of_nat(x0: Nat.nat): BigInt = x0 match {
   case Nat.Nata(x) => x
 }
-
-def nat_of_integer(k: BigInt): Nat.nat =
-  Nat.Nata(Orderings.max[BigInt](BigInt(0), k))
 
 } /* object Code_Numeral */
 
@@ -105,15 +82,6 @@ def less_eq_nat(m: nat, n: nat): Boolean =
   Code_Numeral.integer_of_nat(m) <= Code_Numeral.integer_of_nat(n)
 
 } /* object Nat */
-
-object Num {
-
-abstract sealed class num
-final case class One() extends num
-final case class Bit0(a: num) extends num
-final case class Bit1(a: num) extends num
-
-} /* object Num */
 
 object Product_Type {
 
@@ -155,8 +123,12 @@ final case class Ack(a: (Nat.nat, (Nat.nat, Nat.nat)), b: Nat.nat) extends
   message
 final case class Cancel(a: (Nat.nat, (Nat.nat, Nat.nat))) extends message
 
+abstract sealed class betterNat
+final case class N(a: Nat.nat) extends betterNat
+final case class Undeclared() extends betterNat
+
 def export(x0: List[((Nat.nat, (Nat.nat, Nat.nat)),
-                      (Nat.nat, (Nat.nat, (Boolean, Boolean))))]):
+                      (betterNat, (betterNat, (Boolean, Boolean))))]):
       List[((Nat.nat, (Nat.nat, Nat.nat)), Nat.nat)]
   =
   x0 match {
@@ -164,75 +136,117 @@ def export(x0: List[((Nat.nat, (Nat.nat, Nat.nat)),
   case v :: va =>
     (v match {
        case (_, (_, (_, (true, _)))) => export(va)
-       case (tid, (_, (amc, (false, true)))) => (tid, amc) :: export(va)
+       case (tid, (_, (N(amcnat), (false, true)))) =>
+         (tid, amcnat) :: export(va)
        case (_, (_, (_, (false, false)))) => export(va)
      })
 }
 
+def comparison(x0: betterNat, uu: betterNat, uv: Nat.nat => Nat.nat => Boolean):
+      Boolean
+  =
+  (x0, uu, uv) match {
+  case (Undeclared(), uu, uv) => false
+  case (N(v), Undeclared(), ux) => false
+  case (N(i), N(j), f) => (f(i))(j)
+}
+
+def equal_betterNat(x0: betterNat, x1: betterNat): Boolean = (x0, x1) match {
+  case (N(x1), Undeclared()) => false
+  case (Undeclared(), N(x1)) => false
+  case (N(x1), N(y1)) => Nat.equal_nata(x1, y1)
+  case (Undeclared(), Undeclared()) => true
+}
+
 def traiterMessage(x0: message,
                     bdd: List[((Nat.nat, (Nat.nat, Nat.nat)),
-                                (Nat.nat, (Nat.nat, (Boolean, Boolean))))]):
+                                (betterNat, (betterNat, (Boolean, Boolean))))]):
       List[((Nat.nat, (Nat.nat, Nat.nat)),
-             (Nat.nat, (Nat.nat, (Boolean, Boolean))))]
+             (betterNat, (betterNat, (Boolean, Boolean))))]
   =
   (x0, bdd) match {
   case (Cancel(i), bdd) =>
     table.modify[(Nat.nat, (Nat.nat, Nat.nat)),
-                  (Nat.nat,
-                    (Nat.nat,
+                  (betterNat,
+                    (betterNat,
                       (Boolean,
-                        Boolean)))](i, (Nat.zero_nat,
- (Nat.zero_nat, (true, false))),
+                        Boolean)))](i, (Undeclared(),
+ (Undeclared(), (true, false))),
                                      bdd)
   case (Pay(i, amc), bdd) =>
     (table.assoc[(Nat.nat, (Nat.nat, Nat.nat)),
-                  (Nat.nat, (Nat.nat, (Boolean, Boolean)))](i, bdd)
+                  (betterNat, (betterNat, (Boolean, Boolean)))](i, bdd)
        match {
        case table.Somea((amm, (amc2, (ann, vala)))) =>
          (if (! ann &&
                 (! vala &&
-                  (Nat.less_nat(amc2, amc) && Nat.less_nat(Nat.zero_nat, amc))))
+                  (comparison(N(amc), amc2,
+                               ((x: Nat.nat) => (y: Nat.nat) =>
+                                 Nat.less_nat(y, x))) &&
+                    comparison(N(amc), N(Nat.zero_nat),
+                                ((x: Nat.nat) => (y: Nat.nat) =>
+                                  Nat.less_nat(y, x))))))
            table.modify[(Nat.nat, (Nat.nat, Nat.nat)),
-                         (Nat.nat,
-                           (Nat.nat,
+                         (betterNat,
+                           (betterNat,
                              (Boolean,
                                Boolean)))](i,
-    (amm, (amc, (ann, Nat.less_eq_nat(amm, amc)))), bdd)
+    (amm, (N(amc),
+            (false,
+              comparison(N(amc), amm,
+                          ((x: Nat.nat) => (y: Nat.nat) =>
+                            Nat.less_eq_nat(y, x)))))),
+    bdd)
            else bdd)
        case table.Nonea() =>
-         table.modify[(Nat.nat, (Nat.nat, Nat.nat)),
-                       (Nat.nat,
-                         (Nat.nat,
-                           (Boolean,
-                             Boolean)))](i,
-  (Code_Numeral.nat_of_integer(BigInt(999999)), (amc, (false, false))), bdd)
+         (if (Nat.less_nat(Nat.zero_nat, amc))
+           table.modify[(Nat.nat, (Nat.nat, Nat.nat)),
+                         (betterNat,
+                           (betterNat,
+                             (Boolean,
+                               Boolean)))](i,
+    (Undeclared(), (N(amc), (false, false))), bdd)
+           else bdd)
      })
   case (Ack(i, amm), bdd) =>
     (table.assoc[(Nat.nat, (Nat.nat, Nat.nat)),
-                  (Nat.nat, (Nat.nat, (Boolean, Boolean)))](i, bdd)
+                  (betterNat, (betterNat, (Boolean, Boolean)))](i, bdd)
        match {
        case table.Somea((amm2, (amc, (ann, vala)))) =>
          (if (! ann &&
                 (! vala &&
-                  (Nat.less_nat(amm, amm2) &&
-                    (Nat.less_nat(Nat.zero_nat, amm) &&
-                      Nat.less_nat(Nat.zero_nat, amm2)))))
+                  ((equal_betterNat(amm2, Undeclared()) ||
+                     ! (comparison(N(amm), amm2,
+                                    ((x: Nat.nat) => (y: Nat.nat) =>
+                                      Nat.less_eq_nat(y, x))))) &&
+                    ((equal_betterNat(amc, Undeclared()) ||
+                       comparison(amc, N(Nat.zero_nat),
+                                   ((x: Nat.nat) => (y: Nat.nat) =>
+                                     Nat.less_nat(y, x)))) &&
+                      (equal_betterNat(amm2, Undeclared()) ||
+                        comparison(amm2, N(Nat.zero_nat),
+                                    ((x: Nat.nat) => (y: Nat.nat) =>
+                                      Nat.less_eq_nat(y, x))))))))
            table.modify[(Nat.nat, (Nat.nat, Nat.nat)),
-                         (Nat.nat,
-                           (Nat.nat,
+                         (betterNat,
+                           (betterNat,
                              (Boolean,
                                Boolean)))](i,
-    (amm, (amc, (ann, Nat.less_eq_nat(amm, amc)))), bdd)
+    (N(amm),
+      (amc, (false,
+              equal_betterNat(amc, Undeclared()) ||
+                comparison(amc, N(amm),
+                            ((x: Nat.nat) => (y: Nat.nat) =>
+                              Nat.less_eq_nat(y, x)))))),
+    bdd)
            else bdd)
        case table.Nonea() =>
-         (if (Nat.less_nat(Nat.zero_nat, amm))
-           table.modify[(Nat.nat, (Nat.nat, Nat.nat)),
-                         (Nat.nat,
-                           (Nat.nat,
-                             (Boolean,
-                               Boolean)))](i,
-    (amm, (Nat.zero_nat, (false, false))), bdd)
-           else bdd)
+         table.modify[(Nat.nat, (Nat.nat, Nat.nat)),
+                       (betterNat,
+                         (betterNat,
+                           (Boolean,
+                             Boolean)))](i,
+  (N(amm), (N(Nat.zero_nat), (false, false))), bdd)
      })
 }
 
