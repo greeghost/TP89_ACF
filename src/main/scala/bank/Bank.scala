@@ -11,42 +11,27 @@ trait equal[A] {
   val `HOL.equal`: (A, A) => Boolean
 }
 def equal[A](a: A, b: A)(implicit A: equal[A]): Boolean = A.`HOL.equal`(a, b)
-object equal {
-  implicit def `Product_Type.equal_prod`[A : equal, B : equal]: equal[(A, B)] =
-    new equal[(A, B)] {
-    val `HOL.equal` = (a: (A, B), b: (A, B)) =>
-      Product_Type.equal_proda[A, B](a, b)
-  }
-  implicit def `Nat.equal_nat`: equal[Nat.nat] = new equal[Nat.nat] {
-    val `HOL.equal` = (a: Nat.nat, b: Nat.nat) => Nat.equal_nata(a, b)
-  }
-}
 
 def eq[A : equal](a: A, b: A): Boolean = equal[A](a, b)
 
 } /* object HOL */
 
-object Orderings {
+/* message type coming from Isabelle Theories */
 
-trait ord[A] {
-  val `Orderings.less_eq`: (A, A) => Boolean
-  val `Orderings.less`: (A, A) => Boolean
-}
-def less_eq[A](a: A, b: A)(implicit A: ord[A]): Boolean =
-  A.`Orderings.less_eq`(a, b)
-def less[A](a: A, b: A)(implicit A: ord[A]): Boolean = A.`Orderings.less`(a, b)
-object ord {
-  implicit def `Code_Numeral.ord_integer`: ord[BigInt] = new ord[BigInt] {
-    val `Orderings.less_eq` = (a: BigInt, b: BigInt) => a <= b
-    val `Orderings.less` = (a: BigInt, b: BigInt) => a < b
-  }
-}
+abstract sealed class message
+final case class Pay(a: (Nat.nat, (Nat.nat, Nat.nat)), b: Nat.nat) extends message
+final case class Ack(a: (Nat.nat, (Nat.nat, Nat.nat)), b: Nat.nat) extends message
+final case class Cancel(a: (Nat.nat, (Nat.nat, Nat.nat))) extends message
 
-def max[A : ord](a: A, b: A): A = (if (less_eq[A](a, b)) b else a)
+/* Nat Types coming from Isabelle Theories */
 
-} /* object Orderings */
 
 object Code_Numeral {
+
+implicit def ord_integer: Orderings.ord[BigInt] = new Orderings.ord[BigInt] {
+  val `Orderings.less_eq` = (a: BigInt, b: BigInt) => a <= b
+  val `Orderings.less` = (a: BigInt, b: BigInt) => a < b
+}
 
 def integer_of_nat(x0: Nat.nat): BigInt = x0 match {
   case Nat.Nata(x) => x
@@ -57,148 +42,141 @@ def nat_of_integer(k: BigInt): Nat.nat =
 
 } /* object Code_Numeral */
 
-object Nat {
 
+object Orderings {
+
+trait ord[A] {
+  val `Orderings.less_eq`: (A, A) => Boolean
+  val `Orderings.less`: (A, A) => Boolean
+}
+def less_eq[A](a: A, b: A)(implicit A: ord[A]): Boolean =
+  A.`Orderings.less_eq`(a, b)
+def less[A](a: A, b: A)(implicit A: ord[A]): Boolean = A.`Orderings.less`(a, b)
+
+def max[A : ord](a: A, b: A): A = (if (less_eq[A](a, b)) b else a)
+
+} /* object Orderings */
+
+object Nat {
+import /*implicits*/ Code_Numeral.ord_integer
 abstract sealed class nat
 final case class Nata(a: BigInt) extends nat
 
 def equal_nata(m: nat, n: nat): Boolean =
   Code_Numeral.integer_of_nat(m) == Code_Numeral.integer_of_nat(n)
 
+implicit def equal_nat: HOL.equal[nat] = new HOL.equal[nat] {
+  val `HOL.equal` = (a: nat, b: nat) => equal_nata(a, b)
+}
+
 def less_nat(m: nat, n: nat): Boolean =
   Code_Numeral.integer_of_nat(m) < Code_Numeral.integer_of_nat(n)
 
+def one_nat: nat = Nata(BigInt(1))
 def zero_nat: nat = Nata(BigInt(0))
 
 def less_eq_nat(m: nat, n: nat): Boolean =
   Code_Numeral.integer_of_nat(m) <= Code_Numeral.integer_of_nat(n)
+  
+def plus_nat(m: nat, n: nat): nat =
+  Nata(Code_Numeral.integer_of_nat(m) + Code_Numeral.integer_of_nat(n))
 
+def minus_nat(m: nat, n: nat): nat =
+  Nata(Orderings.max[BigInt](BigInt(0),
+                              Code_Numeral.integer_of_nat(m) -
+                                Code_Numeral.integer_of_nat(n)))
+  
 } /* object Nat */
 
-object Num {
 
-abstract sealed class num
-final case class One() extends num
-final case class Bit0(a: num) extends num
-final case class Bit1(a: num) extends num
+object Natural {
 
-} /* object Num */
+  def apply(numeral: BigInt): Natural = new Natural(numeral max 0)
+  def apply(numeral: Int): Natural = Natural(BigInt(numeral))
+  def apply(numeral: String): Natural = Natural(BigInt(numeral))
 
-object Product_Type {
-
-def equal_proda[A : HOL.equal, B : HOL.equal](x0: (A, B), x1: (A, B)): Boolean =
-  (x0, x1) match {
-  case ((x1, x2), (y1, y2)) => HOL.eq[A](x1, y1) && HOL.eq[B](x2, y2)
 }
 
-} /* object Product_Type */
+class Natural private (private val value: BigInt) {
 
-object table {
+  override def hashCode(): Int = this.value.hashCode()
 
-abstract sealed class option[A]
-final case class Somea[A](a: A) extends option[A]
-final case class Nonea[A]() extends option[A]
+  override def equals(that: Any): Boolean = that match {
+    case that: Natural => this equals that
+    case _ => false
+  }
 
-def assoc[A : HOL.equal, B](uu: A, x1: List[(A, B)]): option[B] = (uu, x1) match
-  {
-  case (uu, Nil) => Nonea[B]()
-  case (x1, (x, y) :: xs) =>
-    (if (HOL.eq[A](x, x1)) Somea[B](y) else assoc[A, B](x1, xs))
+  override def toString(): String = this.value.toString
+
+  def equals(that: Natural): Boolean = this.value == that.value
+
+  def as_BigInt: BigInt = this.value
+  def as_Int: Int = if (this.value >= scala.Int.MinValue && this.value <= scala.Int.MaxValue)
+    this.value.intValue
+  else sys.error("Int value out of range: " + this.value.toString)
+
+  def +(that: Natural): Natural = new Natural(this.value + that.value)
+  def -(that: Natural): Natural = Natural(this.value - that.value)
+  def *(that: Natural): Natural = new Natural(this.value * that.value)
+
+  def /%(that: Natural): (Natural, Natural) = if (that.value == 0) (new Natural(0), this)
+  else {
+    val (k, l) = this.value /% that.value
+    (new Natural(k), new Natural(l))
+  }
+
+  def <=(that: Natural): Boolean = this.value <= that.value
+
+  def <(that: Natural): Boolean = this.value < that.value
+
 }
 
-def modify[A : HOL.equal, B](x: A, y: B, xa2: List[(A, B)]): List[(A, B)] =
-  (x, y, xa2) match {
-  case (x, y, Nil) => List((x, y))
-  case (x, y, (z, u) :: r) =>
-    (if (HOL.eq[A](x, z)) (x, y) :: r else (z, u) :: modify[A, B](x, y, r))
-}
 
-} /* object table */
+/* The bank object used in IHM */
 
-object tp89 {
-
-abstract sealed class message
-final case class Pay(a: (Nat.nat, (Nat.nat, Nat.nat)), b: Nat.nat) extends
-  message
-final case class Ack(a: (Nat.nat, (Nat.nat, Nat.nat)), b: Nat.nat) extends
-  message
-final case class Cancel(a: (Nat.nat, (Nat.nat, Nat.nat))) extends message
-
-def export(x0: List[((Nat.nat, (Nat.nat, Nat.nat)),
-                      (Nat.nat, (Nat.nat, (Boolean, Boolean))))]):
-      List[((Nat.nat, (Nat.nat, Nat.nat)), Nat.nat)]
-  =
-  x0 match {
-  case Nil => Nil
-  case v :: va =>
-    (v match {
-       case (_, (_, (_, (true, _)))) => export(va)
-       case (tid, (_, (amc, (false, true)))) => (tid, amc) :: export(va)
-       case (_, (_, (_, (false, false)))) => export(va)
-     })
-}
-
-def traiterMessage(x0: message,
-                    bdd: List[((Nat.nat, (Nat.nat, Nat.nat)),
-                                (Nat.nat, (Nat.nat, (Boolean, Boolean))))]):
-      List[((Nat.nat, (Nat.nat, Nat.nat)),
-             (Nat.nat, (Nat.nat, (Boolean, Boolean))))]
-  =
-  (x0, bdd) match {
-  case (Cancel(i), bdd) =>
-    table.modify[(Nat.nat, (Nat.nat, Nat.nat)),
-                  (Nat.nat,
-                    (Nat.nat,
-                      (Boolean,
-                        Boolean)))](i, (Nat.zero_nat,
- (Nat.zero_nat, (true, false))),
-                                     bdd)
-  case (Pay(i, amc), bdd) =>
-    (table.assoc[(Nat.nat, (Nat.nat, Nat.nat)),
-                  (Nat.nat, (Nat.nat, (Boolean, Boolean)))](i, bdd)
-       match {
-       case table.Somea((amm, (amc2, (ann, vala)))) =>
-         (if (! ann && (! vala && Nat.less_nat(amc2, amc)))
-           table.modify[(Nat.nat, (Nat.nat, Nat.nat)),
-                         (Nat.nat,
-                           (Nat.nat,
-                             (Boolean,
-                               Boolean)))](i,
-    (amm, (amc, (ann, Nat.less_eq_nat(amm, amc)))), bdd)
-           else bdd)
-       case table.Nonea() =>
-         table.modify[(Nat.nat, (Nat.nat, Nat.nat)),
-                       (Nat.nat,
-                         (Nat.nat,
-                           (Boolean,
-                             Boolean)))](i,
-  (Code_Numeral.nat_of_integer(BigInt(999999)), (amc, (false, false))), bdd)
-     })
-  case (Ack(i, amm), bdd) =>
-    (table.assoc[(Nat.nat, (Nat.nat, Nat.nat)),
-                  (Nat.nat, (Nat.nat, (Boolean, Boolean)))](i, bdd)
-       match {
-       case table.Somea((amm2, (amc, (ann, vala)))) =>
-         (if (! ann && (! vala && Nat.less_nat(amm, amm2)))
-           table.modify[(Nat.nat, (Nat.nat, Nat.nat)),
-                         (Nat.nat,
-                           (Nat.nat,
-                             (Boolean,
-                               Boolean)))](i,
-    (amm, (amc, (ann, Nat.less_eq_nat(amm, amc)))), bdd)
-           else bdd)
-       case table.Nonea() =>
-         table.modify[(Nat.nat, (Nat.nat, Nat.nat)),
-                       (Nat.nat,
-                         (Nat.nat,
-                           (Boolean,
-                             Boolean)))](i,
-  (amm, (Nat.zero_nat, (false, false))), bdd)
-     })
-}
-
-} /* object tp89 */
-
+class Bank(validator : TransValidator) extends Subject{
+	var trace: List[ExtMessage]=List()
+	var obs: Set[Observer]=Set()
+	
+	def addObserver(o:Observer)= {obs=obs + o}
+	def removeObserver(o:Observer)={obs=obs - o}
+	def update= obs.map((o:Observer)=> o.myNotify(this))
+		
+	def transListToString(l:List[((Nat.nat, (Nat.nat,Nat.nat)),Nat.nat)]):String=
+	  l match {
+	  case Nil => ""
+	  case ((Nat.Nata(c), (Nat.Nata(m), Nat.Nata(i))),Nat.Nata(am))::rem => "(("+c+","+m+","+i+"),"+am+")\n"+transListToString(rem)
+	}
+	  
+	def extMessageListToString(l:List[ExtMessage]):String=
+	  l match {
+	  case Nil => ""
+	  case m::rem => (m.toString)+" "+extMessageListToString(rem)
+	}
+	
+	def transToString=transListToString(validator.getValidTrans)
+	def traceToString=
+	  extMessageListToString(trace)
+	// Pour convertir un ExtMessage en message on doit convertir des Int scala en Nat Isabelle 
+	// 
+	def extMessage2message(m:ExtMessage):message=
+	  m match{
+	  	case ExtPay(c,m,tid,am) => if (c>=0 && m>=0 && tid>= 0 && am>=0) Pay((Nat.Nata(c),(Nat.Nata(m),Nat.Nata(tid))),Nat.Nata(am)) else throw new IllegalArgumentException("Negative numbers for client, merchant or transaction")
+	  	case ExtAck(c,m,tid,am) => if (c>=0 && m>=0 && tid>= 0 && am>=0) Ack((Nat.Nata(c),(Nat.Nata(m),Nat.Nata(tid))),Nat.Nata(am)) else throw new IllegalArgumentException("Negative numbers for client, merchant or transaction")
+	  	case ExtCancel(c,m,tid) => if (c>=0 && m>=0 && tid>= 0) Cancel((Nat.Nata(c),(Nat.Nata(m),Nat.Nata(tid)))) else throw new IllegalArgumentException("Negative numbers for client, merchant or transaction")
+	}
+	  
+	def traiter(m: ExtMessage):Unit={
+	  try{
+	  	validator.process(extMessage2message(m))
+	  	trace= m::trace
+	  	update
+	  } 
+	  	catch {
+	  	  case e:IllegalArgumentException => ()
+	  	}
+	  	
+	}
 	
 	
 }
